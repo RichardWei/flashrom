@@ -91,7 +91,7 @@ static void progress_callback(struct flashctx *flash) {
 	}
 
 	if (flash->progress_state->current >= flash->progress_state->total - 1)
-		printf("Progress almost complete for stage %d, current %ld, total %ld\n",
+		printf("Progress almost complete for stage %u, current %lld, total %lld\n",
 			flash->progress_state->stage, flash->progress_state->current, flash->progress_state->total);
 
 	progress_user_data->last_seen[flash->progress_state->stage] = flash->progress_state->current;
