@@ -19355,7 +19355,7 @@ const struct flashchip flashchips[] = {
 		/* 4 x 256B Security Region (OTP) */
 		.feature_bits	= FEATURE_WRSR_WREN | FEATURE_WRSR_EXT3 | FEATURE_OTP |
 				  FEATURE_4BA_ENTER | FEATURE_4BA_NATIVE,
-		.tested		= TEST_UNTESTED,
+		.tested		= TEST_OK_PREW,
 		.probe		= PROBE_SPI_RDID,
 		.probe_timing	= TIMING_ZERO,
 		.block_erasers	=
@@ -20560,6 +20560,52 @@ const struct flashchip flashchips[] = {
 		.write		= SPI_CHIP_WRITE256,
 		.read		= SPI_CHIP_READ,
 		.voltage	= {1650, 1950},
+	},
+
+	{
+		.vendor		= "Winbond",
+		.name		= "W25R512NW/W74M51NW",
+		.bustype	= BUS_SPI,
+		.manufacture_id	= WINBOND_NEX_ID,
+		.model_id	= WINBOND_NEX_W25R512NW,
+		.total_size	= 65536,
+		.page_size	= 256,
+		/* supports SFDP */
+		/* OTP: 3X256B; read 0x48; write 0x42, erase 0x44, read ID 0x4B */
+		.feature_bits	= FEATURE_WRSR_WREN | FEATURE_OTP | FEATURE_4BA,
+		.tested		= TEST_OK_PREW,
+		.probe		= PROBE_SPI_RDID,
+		.probe_timing	= TIMING_ZERO,
+		.block_erasers	=
+		{
+			{
+				.eraseblocks = { {4 * 1024, 16384} },
+				.block_erase = SPI_BLOCK_ERASE_21,
+			}, {
+				.eraseblocks = { {4 * 1024, 16384} },
+				.block_erase = SPI_BLOCK_ERASE_20,
+			}, {
+				.eraseblocks = { {32 * 1024, 2048} },
+				.block_erase = SPI_BLOCK_ERASE_52,
+			}, {
+				.eraseblocks = { {64 * 1024, 1024} },
+				.block_erase = SPI_BLOCK_ERASE_DC,
+			}, {
+				.eraseblocks = { {64 * 1024, 1024} },
+				.block_erase = SPI_BLOCK_ERASE_D8,
+			}, {
+				.eraseblocks = { {64 * 1024 * 1024, 1} },
+				.block_erase = SPI_BLOCK_ERASE_60,
+			}, {
+				.eraseblocks = { {64 * 1024 * 1024, 1} },
+				.block_erase = SPI_BLOCK_ERASE_C7,
+			}
+		},
+		.printlock	= SPI_PRETTYPRINT_STATUS_REGISTER_BP3_SRWD,
+		.unlock		= SPI_DISABLE_BLOCKPROTECT,
+		.write		= SPI_CHIP_WRITE256,
+		.read		= SPI_CHIP_READ,
+		.voltage	= {1700, 1950},
 	},
 
 	{
@@ -23666,7 +23712,7 @@ const struct flashchip flashchips[] = {
 		/* We present our own "report this" text hence we do not */
 		/* want the default "This flash part has status UNTESTED..." */
 		/* text to be printed. */
-		.tested		= TEST_OK_PREW,
+		.tested		= { .probe = OK, .read = OK, .erase = OK, .write = OK, .wp = NA },
 		.probe		= PROBE_SPI_SFDP,
 		.block_erasers	= {}, /* set by probing function */
 		.unlock		= SPI_DISABLE_BLOCKPROTECT, /* is this safe? */
