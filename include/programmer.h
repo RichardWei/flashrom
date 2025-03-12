@@ -23,7 +23,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "flash.h"	/* for chipaddr and flashctx */
+#include "spi.h"
 
 enum programmer_type {
 	PCI = 1, /* to detect uninitialized values */
@@ -525,5 +525,7 @@ static inline bool spi_chip_4ba(const struct flashctx *const flash)
 	return flash->chip->bustype == BUS_SPI &&
 		(flash->chip->feature_bits & (FEATURE_4BA_ENTER | FEATURE_4BA_ENTER_WREN | FEATURE_4BA_ENTER_EAR7));
 }
+
+enum chipbustype get_buses_supported(void);
 
 #endif				/* !__PROGRAMMER_H__ */

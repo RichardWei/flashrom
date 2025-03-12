@@ -621,9 +621,12 @@ struct flashrom_flashctx {
 		void *data;
 	} chip_restore_fn[MAX_CHIP_RESTORE_FUNCTIONS];
 	/* Progress reporting */
-	flashrom_progress_callback *progress_callback;
-	struct flashrom_progress *progress_state;
+	flashrom_progress_callback_v2 *progress_callback;
+	struct flashrom_progress progress_state;
 	struct stage_progress stage_progress[FLASHROM_PROGRESS_NR];
+	/* deprecated, do not use */
+	flashrom_progress_callback *deprecated_progress_callback;
+	struct flashrom_progress *deprecated_progress_state;
 
 	/* Maximum allowed % of redundant erase */
 	int sacrifice_ratio;
@@ -726,14 +729,7 @@ struct cli_progress {
 /* cli_common.c */
 void print_chip_support_status(const struct flashchip *chip);
 
-/* cli_output.c */
-extern enum flashrom_log_level verbose_screen;
-extern enum flashrom_log_level verbose_logfile;
-int open_logfile(const char * const filename);
-int close_logfile(void);
-void start_logging(void);
-int flashrom_print_cb(enum flashrom_log_level level, const char *fmt, va_list ap);
-void flashrom_progress_cb(struct flashrom_flashctx *flashctx);
+/* libflashrom.c */
 /* Let gcc and clang check for correct printf-style format strings. */
 int print(enum flashrom_log_level level, const char *fmt, ...)
 #ifdef __MINGW32__
@@ -764,18 +760,5 @@ __attribute__((format(printf, 2, 3)));
 #define msg_cspew(...)	print(FLASHROM_MSG_SPEW, __VA_ARGS__)	/* chip debug spew  */
 void init_progress(struct flashctx *flash, enum flashrom_progress_stage stage, size_t total);
 void update_progress(struct flashctx *flash, enum flashrom_progress_stage stage, size_t increment);
-
-/* spi.c */
-struct spi_command {
-	unsigned int writecnt;
-	unsigned int readcnt;
-	const unsigned char *writearr;
-	unsigned char *readarr;
-};
-#define NULL_SPI_CMD { 0, 0, NULL, NULL, }
-int spi_send_command(const struct flashctx *flash, unsigned int writecnt, unsigned int readcnt, const unsigned char *writearr, unsigned char *readarr);
-int spi_send_multicommand(const struct flashctx *flash, struct spi_command *cmds);
-
-enum chipbustype get_buses_supported(void);
 
 #endif				/* !__FLASH_H__ */
