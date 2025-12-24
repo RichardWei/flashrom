@@ -181,3 +181,192 @@
 		.read		= SPI_CHIP_READ,
 		.voltage	= {2300, 3600},
 	},
+
+	{
+		.vendor         = "PUYA",
+		.name           = "P25Q40H",
+		.bustype        = BUS_SPI,
+		.manufacture_id = PUYA_ID,
+		.model_id       = PUYA_P25Q40H,
+		.total_size     = 512, // 512 KB
+		.page_size      = 256,
+		.feature_bits   = FEATURE_WRSR_WREN | FEATURE_OTP,
+		.tested         = TEST_UNTESTED,
+		.probe          = PROBE_SPI_RDID,
+		.probe_timing   = TIMING_ZERO,
+		.block_erasers  =
+		{
+			{ .eraseblocks = { {4 * 1024, 128} }, .block_erase = SPI_BLOCK_ERASE_20 },
+			{ .eraseblocks = { {32 * 1024, 16} }, .block_erase = SPI_BLOCK_ERASE_52 },
+			{ .eraseblocks = { {64 * 1024, 8} }, .block_erase = SPI_BLOCK_ERASE_D8 },
+			{ .eraseblocks = { {512 * 1024, 1} }, .block_erase = SPI_BLOCK_ERASE_60 },
+			{ .eraseblocks = { {512 * 1024, 1} }, .block_erase = SPI_BLOCK_ERASE_C7 }
+		},
+		.printlock      = SPI_PRETTYPRINT_STATUS_REGISTER_BP4_SRWD,
+		.unlock         = SPI_DISABLE_BLOCKPROTECT_BP4_SRWD,
+		.write          = SPI_CHIP_WRITE256,
+		.read           = SPI_CHIP_READ,
+		.voltage        = {2300, 3600},
+	},
+
+	{
+		.vendor         = "PUYA",
+		.name           = "P25Q80H",
+		.bustype        = BUS_SPI,
+		.manufacture_id = PUYA_ID,
+		.model_id       = PUYA_P25Q80H,
+		.total_size     = 1024, // 1 MB
+		.page_size      = 256,
+		.feature_bits   = FEATURE_WRSR_WREN | FEATURE_OTP,
+		.tested         = TEST_UNTESTED,
+		.probe          = PROBE_SPI_RDID,
+		.probe_timing   = TIMING_ZERO,
+		.block_erasers  =
+		{
+			{ .eraseblocks = { {4 * 1024, 256} }, .block_erase = SPI_BLOCK_ERASE_20 },
+			{ .eraseblocks = { {32 * 1024, 32} }, .block_erase = SPI_BLOCK_ERASE_52 },
+			{ .eraseblocks = { {64 * 1024, 16} }, .block_erase = SPI_BLOCK_ERASE_D8 },
+			{ .eraseblocks = { {1024 * 1024, 1} }, .block_erase = SPI_BLOCK_ERASE_60 },
+			{ .eraseblocks = { {1024 * 1024, 1} }, .block_erase = SPI_BLOCK_ERASE_C7 }
+		},
+		.printlock      = SPI_PRETTYPRINT_STATUS_REGISTER_BP4_SRWD,
+		.unlock         = SPI_DISABLE_BLOCKPROTECT_BP4_SRWD,
+		.write          = SPI_CHIP_WRITE256,
+		.read           = SPI_CHIP_READ,
+		.voltage        = {2300, 3600},
+	},
+
+	{
+		.vendor         = "PUYA",
+		.name           = "P25Q16H",
+		.bustype        = BUS_SPI,
+		.manufacture_id = PUYA_ID,
+		.model_id       = PUYA_P25Q16H,
+		.total_size     = 2048, // 2 MB
+		.page_size      = 256,
+		.feature_bits   = FEATURE_WRSR_WREN | FEATURE_OTP,
+		.tested         = TEST_UNTESTED,
+		.probe          = PROBE_SPI_RDID,
+		.probe_timing   = TIMING_ZERO,
+		.block_erasers  =
+		{
+			{ .eraseblocks = { {4 * 1024, 512} }, .block_erase = SPI_BLOCK_ERASE_20 },
+			{ .eraseblocks = { {32 * 1024, 64} }, .block_erase = SPI_BLOCK_ERASE_52 },
+			{ .eraseblocks = { {64 * 1024, 32} }, .block_erase = SPI_BLOCK_ERASE_D8 },
+			{ .eraseblocks = { {2048 * 1024, 1} }, .block_erase = SPI_BLOCK_ERASE_60 },
+			{ .eraseblocks = { {2048 * 1024, 1} }, .block_erase = SPI_BLOCK_ERASE_C7 }
+		},
+		.printlock      = SPI_PRETTYPRINT_STATUS_REGISTER_BP4_SRWD,
+		.unlock         = SPI_DISABLE_BLOCKPROTECT_BP4_SRWD,
+		.write          = SPI_CHIP_WRITE256,
+		.read           = SPI_CHIP_READ,
+		.voltage        = {2300, 3600},
+	},
+
+	{
+		.vendor         = "PUYA",
+		.name           = "P25Q32H",
+		.bustype        = BUS_SPI,
+		.manufacture_id = PUYA_ID,
+		.model_id       = PUYA_P25Q32H,
+		.total_size     = 4096, // 4 MB
+		.page_size      = 256,
+		.feature_bits   = FEATURE_WRSR_WREN | FEATURE_OTP,
+		.tested         = TEST_UNTESTED,
+		.probe          = PROBE_SPI_RDID,
+		.probe_timing   = TIMING_ZERO,
+		.block_erasers  =
+		{
+			{ .eraseblocks = { {4 * 1024, 1024} }, .block_erase = SPI_BLOCK_ERASE_20 },
+			{ .eraseblocks = { {32 * 1024, 128} }, .block_erase = SPI_BLOCK_ERASE_52 },
+			{ .eraseblocks = { {64 * 1024, 64} }, .block_erase = SPI_BLOCK_ERASE_D8 },
+			{ .eraseblocks = { {4*1024 * 1024, 1} }, .block_erase = SPI_BLOCK_ERASE_60 },
+			{ .eraseblocks = { {4*1024* 1024, 1} }, .block_erase = SPI_BLOCK_ERASE_C7 }
+		},
+		.printlock      = SPI_PRETTYPRINT_STATUS_REGISTER_BP4_SRWD,
+		.unlock         = SPI_DISABLE_BLOCKPROTECT_BP4_SRWD,
+		.write          = SPI_CHIP_WRITE256,
+		.read           = SPI_CHIP_READ,
+		.voltage        = {2300, 3600},
+	},
+
+	{
+		.vendor         = "PUYA",
+		.name           = "P25Q64H",
+		.bustype        = BUS_SPI,
+		.manufacture_id = PUYA_ID,
+		.model_id       = PUYA_P25Q64H,
+		.total_size     = 8192, // 8 MB
+		.page_size      = 256,
+		.feature_bits   = FEATURE_WRSR_WREN | FEATURE_OTP,
+		.tested         = TEST_UNTESTED,
+		.probe          = PROBE_SPI_RDID,
+		.probe_timing   = TIMING_ZERO,
+		.block_erasers  =
+		{
+			{ .eraseblocks = { {4 * 1024, 2048} }, .block_erase = SPI_BLOCK_ERASE_20 },
+			{ .eraseblocks = { {32 * 1024, 256} }, .block_erase = SPI_BLOCK_ERASE_52 },
+			{ .eraseblocks = { {64 * 1024, 128} }, .block_erase = SPI_BLOCK_ERASE_D8 },
+			{ .eraseblocks = { {8*1024 * 1024, 1} }, .block_erase = SPI_BLOCK_ERASE_60 },
+			{ .eraseblocks = { {8*1024* 1024, 1} }, .block_erase = SPI_BLOCK_ERASE_C7 }
+		},
+		.printlock      = SPI_PRETTYPRINT_STATUS_REGISTER_BP4_SRWD,
+		.unlock         = SPI_DISABLE_BLOCKPROTECT_BP4_SRWD,
+		.write          = SPI_CHIP_WRITE256,
+		.read           = SPI_CHIP_READ,
+		.voltage        = {2300, 3600},
+	},
+
+	{
+		.vendor         = "PUYA",
+		.name           = "P25Q128H",
+		.bustype        = BUS_SPI,
+		.manufacture_id = PUYA_ID,
+		.model_id       = PUYA_P25Q128H,
+		.total_size     = 16384, // 16 MB
+		.page_size      = 256,
+		.feature_bits   = FEATURE_WRSR_WREN | FEATURE_OTP,
+		.tested         = TEST_UNTESTED,
+		.probe          = PROBE_SPI_RDID,
+		.probe_timing   = TIMING_ZERO,
+		.block_erasers  =
+		{
+			{ .eraseblocks = { {4 * 1024, 4096} }, .block_erase = SPI_BLOCK_ERASE_20 },
+			{ .eraseblocks = { {32 * 1024, 512} }, .block_erase = SPI_BLOCK_ERASE_52 },
+			{ .eraseblocks = { {64 * 1024, 256} }, .block_erase = SPI_BLOCK_ERASE_D8 },
+			{ .eraseblocks = { {16*1024 * 1024, 1} }, .block_erase = SPI_BLOCK_ERASE_60 },
+			{ .eraseblocks = { {16*1024* 1024, 1} }, .block_erase = SPI_BLOCK_ERASE_C7 }
+		},
+		.printlock      = SPI_PRETTYPRINT_STATUS_REGISTER_BP4_SRWD,
+		.unlock         = SPI_DISABLE_BLOCKPROTECT_BP4_SRWD,
+		.write          = SPI_CHIP_WRITE256,
+		.read           = SPI_CHIP_READ,
+		.voltage        = {2300, 3600},
+	},
+
+	{
+		.vendor         = "PUYA",
+		.name           = "P25Q256H",
+		.bustype        = BUS_SPI,
+		.manufacture_id = PUYA_ID,
+		.model_id       = PUYA_P25Q256H,
+		.total_size     = 32768, // 32 MB
+		.page_size      = 256,
+		.feature_bits   = FEATURE_WRSR_WREN | FEATURE_OTP,
+		.tested         = TEST_UNTESTED,
+		.probe          = PROBE_SPI_RDID,
+		.probe_timing   = TIMING_ZERO,
+		.block_erasers  =
+		{
+			{ .eraseblocks = { {4 * 1024, 8192} }, .block_erase = SPI_BLOCK_ERASE_20 },
+			{ .eraseblocks = { {32 * 1024, 1024} }, .block_erase = SPI_BLOCK_ERASE_52 },
+			{ .eraseblocks = { {64 * 1024, 512} }, .block_erase = SPI_BLOCK_ERASE_D8 },
+			{ .eraseblocks = { {32*1024 * 1024, 1} }, .block_erase = SPI_BLOCK_ERASE_60 },
+			{ .eraseblocks = { {32*1024* 1024, 1} }, .block_erase = SPI_BLOCK_ERASE_C7 }
+		},
+		.printlock      = SPI_PRETTYPRINT_STATUS_REGISTER_BP4_SRWD,
+		.unlock         = SPI_DISABLE_BLOCKPROTECT_BP4_SRWD,
+		.write          = SPI_CHIP_WRITE256,
+		.read           = SPI_CHIP_READ,
+		.voltage        = {2300, 3600},
+	},

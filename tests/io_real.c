@@ -11,6 +11,39 @@
 #include "io_real.h"
 #include <string.h>
 
+#ifdef __APPLE__
+#include <fcntl.h>   
+static int io_real_open(void *state, const char *pathname, int flags, mode_t mode)
+{
+	LOG_ME;
+	return open(pathname,flags, mode);
+}
+
+static FILE *io_real_fopen(void *state, const char *pathname, const char *mode)
+{
+	LOG_ME;
+	return fopen(pathname, mode);
+}
+
+static FILE *io_real_fdopen(void *state, int fd, const char *mode)
+{
+	LOG_ME;
+	return fdopen(fd, mode);
+}
+
+static size_t io_real_fwrite(void *state, const void *ptr, size_t size, size_t nmemb, FILE *fp)
+{
+	return fwrite(ptr, size, nmemb, fp);
+}
+
+static int io_real_fclose(void *state, FILE *fp)
+{
+	LOG_ME;
+	return fclose(fp);
+}
+
+#else
+
 static int io_real_open(void *state, const char *pathname, int flags, mode_t mode)
 {
 	LOG_ME;
@@ -39,6 +72,8 @@ static int io_real_fclose(void *state, FILE *fp)
 	LOG_ME;
 	return __real_fclose(fp);
 }
+
+#endif
 
 /* Mock ios that defer to the real io functions.
  * These exist so that code coverage can print to real files on disk.
