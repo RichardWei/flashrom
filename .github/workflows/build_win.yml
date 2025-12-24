@@ -13,8 +13,29 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        ref: develop
 
+    # =========================
+    # 1. 正确读取 VERSION（PowerShell）
+    # =========================
+    - name: Read version
+      shell: pwsh
+      run: |
+        $version = Get-Content VERSION -TotalCount 1
+        "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
+        Write-Host "Build version: $version"
 
+    - name: Generate timestamp
+      shell: pwsh
+      run: |
+        $ts = Get-Date -Format "yyyyMMdd"
+        "TS=$ts" | Out-File -FilePath $env:GITHUB_ENV -Append
+    
+
+    # =========================
+    # 2. 安装 MSYS2 + 依赖
+    # =========================
     - name: Setup MSYS2
       uses: msys2/setup-msys2@v2
       with:
@@ -27,19 +48,67 @@ jobs:
           mingw-w64-x86_64-pkg-config
           mingw-w64-x86_64-python-sphinx
           mingw-w64-x86_64-cmocka
-          mingw-w64-x86_64-libusb 
-          mingw-w64-x86_64-libftdi 
+          mingw-w64-x86_64-libusb
+          mingw-w64-x86_64-libftdi
 
+    # =========================
+    # 3. Meson 配置
+    # =========================
     - name: Configure Meson
       shell: msys2 {0}
-      run: meson setup builddir -Dprogrammer=ch347_spi -Drpmc=disabled -Dc_args="-U HAVE_CLOCK_GETTIME -DHAVE_CLOCK_GETTIME=0 -Wno-error=builtin-macro-redefined"
+      run: |
+        meson setup builddir \
+          -Dprogrammer=ch347_spi \
+          -Drpmc=disabled \
+          -Dc_args="-U HAVE_CLOCK_GETTIME -DHAVE_CLOCK_GETTIME=0 -Wno-error=builtin-macro-redefined"
 
+    # =========================
+    # 4. 编译
+    # =========================
     - name: Build
       shell: msys2 {0}
       run: meson compile -C builddir
 
-    - name: Upload exe
+    # =========================
+    # 5. 正确重命名 exe（PowerShell）
+    # =========================
+    - name: Rename binary
+      shell: pwsh
+      run: |
+        Rename-Item `
+          builddir/flashrom.exe `
+          ("flashrom-win-x64-{0}.exe" -f $env:VERSION)
+
+    # =========================
+    # 6. 上传 Artifact（Actions 内部使用）
+    # =========================
+    - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: flashrom-exe
-        path: builddir/flashrom.exe
+        name: flashrom-win-x64-${{ env.VERSION }}
+        path: builddir/flashrom-win-x64-${{ env.VERSION }}.exe
+
+
+    - name: Package release archives
+      shell: pwsh
+      run: |
+        Compress-Archive `
+          -Path builddir/flashrom-win-x64-${env:VERSION}.exe `
+          -DestinationPath builddir/flashrom-win-x64-${env:VERSION}.zip `
+          -Force
+
+    # =========================
+    # 7. 发布到 GitHub Release
+    #    ⚠️ 建议只在 develop 或 main 之一
+    # =========================
+    - name: Create GitHub Release (Windows)
+      if: github.ref == 'refs/heads/develop'
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ env.VERSION }}-${{ env.TS }}
+        target_commitish: develop
+        name:  ${{ env.VERSION }}-${{ env.TS }}
+        files: builddir/flashrom-win-x64-${{ env.VERSION }}.zip
+        fail_on_unmatched_files: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
