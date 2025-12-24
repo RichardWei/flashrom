@@ -48,3 +48,16 @@ The official flashrom website is:
   https://www.flashrom.org/
 
 For available contact methods see :doc:`contact`
+
+
+
+Thanks
+-------
+
+
+Thanks to the following repositories, they provided great help
+
+https://github.com/flashrom/flashrom
+https://github.com/ZhiyuanYuanNJ/flashrom
+
+

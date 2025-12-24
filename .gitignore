@@ -20,3 +20,7 @@
 /util/ich_descriptors_tool/.obj
 
 target/
+
+*.cache/
+
+.DS_Store

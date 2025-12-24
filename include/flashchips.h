@@ -662,6 +662,13 @@
 #define PUYA_P25Q06H		0x4010
 #define PUYA_P25Q11H		0x4011
 #define PUYA_P25Q21H		0x4012
+#define PUYA_P25Q40H      	0x6013
+#define PUYA_P25Q80H      	0x6014
+#define PUYA_P25Q16H      	0x6015
+#define PUYA_P25Q32H      	0x6016
+#define PUYA_P25Q64H      	0x6017
+#define PUYA_P25Q128H     	0x6018
+#define PUYA_P25Q256H     	0x6019
 #define PUYA_P25D80H		0x6014
 
 /*
