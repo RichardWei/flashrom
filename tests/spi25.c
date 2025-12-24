@@ -31,9 +31,18 @@ struct flashchip mock_chip = {
  * This declaration is needed for visibility, so that wrap below could
  * redirect to real function.
  */
+
+#ifdef __APPLE__
+int spi_send_command(const struct flashctx *flash,
+		unsigned int writecnt, unsigned int readcnt,
+		const unsigned char *writearr, unsigned char *readarr);
+#else
 int __real_spi_send_command(const struct flashctx *flash,
 		unsigned int writecnt, unsigned int readcnt,
 		const unsigned char *writearr, unsigned char *readarr);
+
+#endif
+
 
 int __wrap_spi_send_command(const struct flashctx *flash,
 		unsigned int writecnt, unsigned int readcnt,
@@ -45,11 +54,14 @@ int __wrap_spi_send_command(const struct flashctx *flash,
 		 * This test is the only one which uses wrap of spi_send_command,
 		 * all other tests use real function.
 		*/
-		return __real_spi_send_command(flash, writecnt, readcnt, writearr, readarr);
+#ifdef __APPLE__
+	return spi_send_command(flash, writecnt, readcnt, writearr, readarr);
+#else
+	return __real_spi_send_command(flash, writecnt, readcnt, writearr, readarr);
+#endif
 
 	if (!flash->progress_callback)
 		check_expected_ptr(flash);
-
 	assert_int_equal(writecnt,    mock_type(int));
 	assert_int_equal(writearr[0], mock_type(int));
 
