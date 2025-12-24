@@ -1,10 +1,10 @@
-name: Build-mac-exe
+name: Build-mac
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ develop ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ develop ]
 
 jobs:
   build:
@@ -13,6 +13,17 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        ref: develop
+
+    - name: Read version
+      run: |
+        VERSION=$(head -n 1 VERSION)
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+        echo "Build version: $VERSION"
+
+    - name: Generate timestamp
+      run: echo "TS=$(date +'%Y%m%d')" >> $GITHUB_ENV
 
     - name: Install Homebrew packages
       run: |
@@ -21,13 +32,55 @@ jobs:
 
     - name: Configure Meson
       run: |
-        meson setup builddir -Dprogrammer=ch347_spi  -Drpmc=disabled -Dc_args="-Wno-error=sometimes-uninitialized"
+        meson setup builddir \
+          -Dprogrammer=ch347_spi \
+          -Drpmc=disabled \
+          -Dc_args="-Wno-error=sometimes-uninitialized"
 
     - name: Build
       run: meson compile -C builddir
 
+    - name: Prepare binary
+      run: |
+        install -m 755 builddir/flashrom builddir/flashrom-macos-intel-${VERSION}
+        file builddir/flashrom-macos-intel-${VERSION}
+
+    - name: Package archives
+      run: |
+        cd builddir
+        ditto -c -k --sequesterRsrc flashrom-macos-intel-${VERSION} flashrom-macos-intel-${VERSION}.zip
+        tar czf flashrom-macos-intel-${VERSION}.tar.gz flashrom-macos-intel-${VERSION}
+        shasum -a 256 flashrom-macos-intel-${VERSION}.zip flashrom-macos-intel-${VERSION}.tar.gz
+
+    - name: Verify archives
+      run: |
+        rm -rf verify
+        mkdir -p verify/zip verify/tar
+
+        ditto -x -k builddir/flashrom-macos-intel-${VERSION}.zip verify/zip
+        test -x verify/zip/flashrom-macos-intel-${VERSION}
+        verify/zip/flashrom-macos-intel-${VERSION} --version
+
+        tar xzf builddir/flashrom-macos-intel-${VERSION}.tar.gz -C verify/tar
+        test -x verify/tar/flashrom-macos-intel-${VERSION}
+        verify/tar/flashrom-macos-intel-${VERSION} --version
+
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: flashrom-macos
-        path: builddir/flashrom
+        name: flashrom-macos-intel-${{ env.VERSION }}
+        path: builddir/flashrom-macos-intel-${{ env.VERSION }}.zip
+
+    - name: Create GitHub Release
+      if: github.ref == 'refs/heads/develop'
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ env.VERSION }}-${{ env.TS }}
+        target_commitish: develop
+        name: ${{ env.VERSION }}-${{ env.TS }}
+        fail_on_unmatched_files: true
+        files: |
+          builddir/flashrom-macos-intel-${{ env.VERSION }}.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
