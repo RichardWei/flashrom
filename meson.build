@@ -558,10 +558,9 @@ install_headers([
 include_dir = include_directories('include')
 
 mapfile = 'libflashrom.map'
-if host_machine.system() == 'darwin' or get_option('cli_link_mode') == 'shared'
-  vflag = ''
-else
-  vflag = '-Wl,--version-script,@0@/@1@'.format(meson.current_source_dir(), mapfile)
+vflags = []
+if host_machine.system() != 'darwin' and get_option('cli_link_mode') != 'shared'
+  vflags += ['-Wl,--version-script,@0@/@1@'.format(meson.current_source_dir(), mapfile)]
 endif
 libflashrom = library(
   'flashrom',
@@ -580,7 +579,7 @@ libflashrom = library(
   install : true,
   # The classic CLI uses internal library symbols. Export them only in the
   # separate shared-CLI build; the static CLI and its existing build stay as-is.
-  link_args : link_args + [vflag] + (host_machine.system() == 'windows' and get_option('cli_link_mode') == 'shared' ? ['-Wl,--export-all-symbols'] : []),
+  link_args : link_args + vflags + (host_machine.system() == 'windows' and get_option('cli_link_mode') == 'shared' ? ['-Wl,--export-all-symbols'] : []),
   link_depends : mapfile,
 )
 

@@ -1,0 +1,320 @@
+name: Build flashrom artifacts
+
+on:
+  push:
+    branches: [develop]
+  pull_request:
+    branches: [develop]
+
+permissions:
+  contents: read
+
+jobs:
+  windows-x64:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version
+        shell: pwsh
+        run: |
+          $version = Get-Content VERSION -TotalCount 1
+          "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-meson
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-pkg-config
+            mingw-w64-x86_64-python-sphinx
+            mingw-w64-x86_64-cmocka
+            mingw-w64-x86_64-libusb
+            mingw-w64-x86_64-libftdi
+
+      - name: Configure original CLI
+        shell: msys2 {0}
+        run: |
+          meson setup builddir \
+            -Dprogrammer=ch347_spi \
+            -Drpmc=disabled \
+            -Dc_args="-U HAVE_CLOCK_GETTIME -DHAVE_CLOCK_GETTIME=0 -Wno-error=builtin-macro-redefined"
+
+      - name: Build original CLI
+        shell: msys2 {0}
+        run: meson compile -C builddir
+
+      - name: Configure shared CLI
+        shell: msys2 {0}
+        run: |
+          meson setup builddir-shared \
+            -Dprogrammer=ch347_spi \
+            -Drpmc=disabled \
+            -Ddefault_library=shared \
+            -Dcli_link_mode=shared \
+            -Dc_args="-U HAVE_CLOCK_GETTIME -DHAVE_CLOCK_GETTIME=0 -Wno-error=builtin-macro-redefined"
+
+      - name: Build shared CLI
+        shell: msys2 {0}
+        run: meson compile -C builddir-shared
+
+      - name: Package shared CLI
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          package="builddir-shared/flashrom-win-x64-shared-${VERSION}"
+          mkdir -p "$package"
+          cp builddir-shared/flashrom.exe "$package/flashrom.exe"
+          cp include/libflashrom.h SHARED_CLI.md "$package/"
+          mapfile -t dlls < <(find builddir-shared -maxdepth 1 -type f -name '*.dll')
+          test "${#dlls[@]}" -eq 1
+          cp "${dlls[0]}" "$package/"
+          dll_name="$(basename "${dlls[0]}")"
+          objdump -p builddir-shared/flashrom.exe | grep -Fi "DLL Name: $dll_name"
+          objdump -p "${dlls[0]}" | grep -F 'flashrom_init'
+          objdump -p "${dlls[0]}" | grep -F 'flashrom_image_read'
+          # Include the DLLs imported by the executable, library, and their dependencies.
+          queue=("$package/flashrom.exe" "$package/$dll_name")
+          for ((i=0; i<${#queue[@]}; i++)); do
+            while read -r import; do
+              runtime="$(find /mingw64/bin -maxdepth 1 -type f -iname "$import" -print -quit)"
+              if test -n "$runtime" && ! test -f "$package/$(basename "$runtime")"; then
+                cp "$runtime" "$package/"
+                queue+=("$package/$(basename "$runtime")")
+              fi
+            done < <(objdump -p "${queue[i]}" | awk '/DLL Name:/ {print $3}')
+          done
+
+      - name: Compile documented MSVC C and C++ clients
+        shell: pwsh
+        run: |
+          $doc = Get-Content SHARED_CLI.md -Raw
+          $match = [regex]::Match($doc, '(?s)```c\r?\n(.*?)\r?\n```')
+          if (-not $match.Success) { throw 'C example was not found in SHARED_CLI.md' }
+          Set-Content -LiteralPath builddir-shared/flashrom_read.c -Value $match.Groups[1].Value -Encoding utf8
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = (& $vswhere -latest -property installationPath).Trim()
+          if (-not $vs) { throw 'Visual Studio was not found' }
+          $dev = Join-Path $vs 'Common7\Tools\VsDevCmd.bat'
+          cmd /c "`"$dev`" -arch=x64 && cl /nologo /W4 /std:c11 /TC /Iinclude /Fobuilddir-shared\read_c.obj /Febuilddir-shared\read_c.exe builddir-shared\flashrom_read.c && cl /nologo /W4 /EHsc /std:c++17 /TP /Iinclude /Fobuilddir-shared\read_cpp.obj /Febuilddir-shared\read_cpp.exe builddir-shared\flashrom_read.c"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Verify shared CLI and package Windows archives
+        shell: pwsh
+        run: |
+          $package = "builddir-shared/flashrom-win-x64-shared-$env:VERSION"
+          $bin = (Resolve-Path $package).Path
+          $oldPath = $env:PATH
+          try {
+            $env:PATH = "$bin;$env:SystemRoot\System32;$env:SystemRoot"
+            & (Join-Path $bin 'flashrom.exe') --version
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally {
+            $env:PATH = $oldPath
+          }
+          Compress-Archive -Path "$package/*" -DestinationPath "$package.zip" -Force
+          $unpacked = "builddir-shared/verify-shared-$env:VERSION"
+          Expand-Archive -Path "$package.zip" -DestinationPath $unpacked -Force
+          & (Join-Path (Resolve-Path $unpacked).Path 'flashrom.exe') --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Rename-Item builddir/flashrom.exe ("flashrom-win-x64-{0}.exe" -f $env:VERSION)
+          Compress-Archive -Path "builddir/flashrom-win-x64-$env:VERSION.exe" `
+            -DestinationPath "builddir/flashrom-win-x64-$env:VERSION.zip" -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flashrom-win-x64-${{ env.VERSION }}
+          path: |
+            builddir/flashrom-win-x64-${{ env.VERSION }}.exe
+            builddir/flashrom-win-x64-${{ env.VERSION }}.zip
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flashrom-win-x64-shared-${{ env.VERSION }}
+          path: builddir-shared/flashrom-win-x64-shared-${{ env.VERSION }}.zip
+          if-no-files-found: error
+
+  macos-intel:
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version
+        run: |
+          VERSION=$(head -n 1 VERSION)
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Install MacPorts
+        run: |
+          set -euxo pipefail
+          curl -fL https://distfiles.macports.org/MacPorts/MacPorts-2.12.5-15-Sequoia.pkg -o MacPorts.pkg
+          sudo installer -verbose -pkg MacPorts.pkg -target /
+          /opt/local/bin/port version
+          echo "/opt/local/bin" >> "$GITHUB_PATH"
+          echo "/opt/local/sbin" >> "$GITHUB_PATH"
+          echo "PKG_CONFIG_PATH=/opt/local/lib/pkgconfig:/opt/local/share/pkgconfig" >> "$GITHUB_ENV"
+
+      - name: Install MacPorts packages
+        run: |
+          set -euxo pipefail
+          sudo port -N selfupdate
+          sudo port -N install meson ninja pkgconfig libusb libftdi1 cmocka py313-sphinx
+          meson --version
+          pkg-config --modversion libusb-1.0
+
+      - name: Configure original CLI
+        run: |
+          set -euxo pipefail
+          meson setup builddir \
+            -Dprogrammer=ch347_spi \
+            -Drpmc=disabled \
+            -Dc_args="-Wno-error=sometimes-uninitialized"
+
+      - name: Build original CLI
+        run: |
+          set -euxo pipefail
+          meson compile -C builddir
+
+      - name: Configure shared CLI
+        run: |
+          set -euxo pipefail
+          meson setup builddir-shared \
+            -Dprogrammer=ch347_spi \
+            -Drpmc=disabled \
+            -Ddefault_library=shared \
+            -Dcli_link_mode=shared \
+            -Dc_args="-Wno-error=sometimes-uninitialized"
+
+      - name: Build shared CLI
+        run: |
+          set -euxo pipefail
+          meson compile -C builddir-shared
+
+      - name: Compile documented C and C++ clients
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          match = re.search(r'(?s)```c\r?\n(.*?)\r?\n```', Path('SHARED_CLI.md').read_text())
+          if not match:
+              raise SystemExit('C example was not found in SHARED_CLI.md')
+          Path('builddir-shared/flashrom_read.c').write_text(match.group(1) + '\n')
+          PY
+          clang -std=c11 -Wall -Wextra -fsyntax-only -Iinclude builddir-shared/flashrom_read.c
+          clang++ -std=c++17 -Wall -Wextra -x c++ -fsyntax-only -Iinclude builddir-shared/flashrom_read.c
+
+      - name: Package and verify shared CLI
+        run: |
+          set -euo pipefail
+          package="builddir-shared/flashrom-macos-intel-shared-${VERSION}"
+          mkdir -p "$package"
+          install -m 755 builddir-shared/flashrom "$package/flashrom"
+          cp include/libflashrom.h SHARED_CLI.md "$package/"
+          dylib=builddir-shared/libflashrom.1.dylib
+          test -f "$dylib"
+          cp -L "$dylib" "$package/libflashrom.1.dylib"
+          old_ref="$(otool -L "$package/flashrom" | awk '/libflashrom/ {print $1; exit}')"
+          test -n "$old_ref"
+          install_name_tool -change "$old_ref" '@executable_path/libflashrom.1.dylib' "$package/flashrom"
+          otool -L "$package/flashrom" | grep -F '@executable_path/libflashrom.1.dylib'
+          nm -gU "$package/libflashrom.1.dylib" | grep -F '_flashrom_init'
+          nm -gU "$package/libflashrom.1.dylib" | grep -F '_flashrom_image_read'
+          "$package/flashrom" --version
+          (cd "$package" && ditto -c -k --sequesterRsrc . "../flashrom-macos-intel-shared-${VERSION}.zip")
+          tar czf "${package}.tar.gz" -C "$package" .
+          mkdir -p builddir-shared/verify-shared
+          ditto -x -k "${package}.zip" builddir-shared/verify-shared
+          builddir-shared/verify-shared/flashrom --version
+
+      - name: Package and verify original CLI
+        run: |
+          set -euo pipefail
+          install -m 755 builddir/flashrom "builddir/flashrom-macos-intel-${VERSION}"
+          "builddir/flashrom-macos-intel-${VERSION}" --version
+          otool -L "builddir/flashrom-macos-intel-${VERSION}"
+          (cd builddir && ditto -c -k --sequesterRsrc "flashrom-macos-intel-${VERSION}" "flashrom-macos-intel-${VERSION}.zip")
+          tar czf "builddir/flashrom-macos-intel-${VERSION}.tar.gz" -C builddir "flashrom-macos-intel-${VERSION}"
+          mkdir -p verify/zip verify/tar
+          ditto -x -k "builddir/flashrom-macos-intel-${VERSION}.zip" verify/zip
+          test -x "verify/zip/flashrom-macos-intel-${VERSION}"
+          "verify/zip/flashrom-macos-intel-${VERSION}" --version
+          tar xzf "builddir/flashrom-macos-intel-${VERSION}.tar.gz" -C verify/tar
+          test -x "verify/tar/flashrom-macos-intel-${VERSION}"
+          "verify/tar/flashrom-macos-intel-${VERSION}" --version
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flashrom-macos-intel-${{ env.VERSION }}
+          path: |
+            builddir/flashrom-macos-intel-${{ env.VERSION }}.zip
+            builddir/flashrom-macos-intel-${{ env.VERSION }}.tar.gz
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flashrom-macos-intel-shared-${{ env.VERSION }}
+          path: |
+            builddir-shared/flashrom-macos-intel-shared-${{ env.VERSION }}.zip
+            builddir-shared/flashrom-macos-intel-shared-${{ env.VERSION }}.tar.gz
+          if-no-files-found: error
+
+  publish-release:
+    needs: [windows-x64, macos-intel]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: flashrom-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Verify assets and calculate checksums
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(head -n 1 VERSION)
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          date_utc=$(date -u +%Y%m%d)
+          tag="${version}-${date_utc}-g${GITHUB_SHA:0:12}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          assets=(
+            "flashrom-win-x64-${version}.zip"
+            "flashrom-win-x64-shared-${version}.zip"
+            "flashrom-macos-intel-${version}.zip"
+            "flashrom-macos-intel-${version}.tar.gz"
+            "flashrom-macos-intel-shared-${version}.zip"
+            "flashrom-macos-intel-shared-${version}.tar.gz"
+          )
+          for asset in "${assets[@]}"; do
+            test -s "release-assets/$asset"
+          done
+          (cd release-assets && sha256sum "${assets[@]}" > SHA256SUMS.txt)
+          cat release-assets/SHA256SUMS.txt
+
+      - name: Publish one Release for both platforms
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ steps.release.outputs.tag }}
+          fail_on_unmatched_files: true
+          files: |
+            release-assets/flashrom-win-x64-${{ env.VERSION }}.zip
+            release-assets/flashrom-win-x64-shared-${{ env.VERSION }}.zip
+            release-assets/flashrom-macos-intel-${{ env.VERSION }}.zip
+            release-assets/flashrom-macos-intel-${{ env.VERSION }}.tar.gz
+            release-assets/flashrom-macos-intel-shared-${{ env.VERSION }}.zip
+            release-assets/flashrom-macos-intel-shared-${{ env.VERSION }}.tar.gz
+            release-assets/SHA256SUMS.txt
