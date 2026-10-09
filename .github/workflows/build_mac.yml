@@ -130,6 +130,60 @@ jobs:
           meson compile -C builddir
 
       # ------------------------------------------------------------
+      # The second build links the same full CLI against libflashrom.dylib.
+      - name: Configure shared CLI
+        run: |
+          set -euxo pipefail
+          meson setup builddir-shared \
+            -Dprogrammer=ch347_spi \
+            -Drpmc=disabled \
+            -Ddefault_library=shared \
+            -Dcli_link_mode=shared \
+            -Dc_args="-Wno-error=sometimes-uninitialized"
+
+      - name: Build shared CLI
+        run: |
+          set -euxo pipefail
+          meson compile -C builddir-shared
+
+      - name: Compile documented C and C++ clients
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          match = re.search(r'(?s)```c\r?\n(.*?)\r?\n```', Path('SHARED_CLI.md').read_text())
+          if not match:
+              raise SystemExit('C example was not found in SHARED_CLI.md')
+          Path('builddir-shared/flashrom_read.c').write_text(match.group(1) + '\n')
+          PY
+          clang -std=c11 -Wall -Wextra -fsyntax-only -Iinclude builddir-shared/flashrom_read.c
+          clang++ -std=c++17 -Wall -Wextra -x c++ -fsyntax-only -Iinclude builddir-shared/flashrom_read.c
+
+      - name: Package and verify shared CLI
+        run: |
+          set -euo pipefail
+          package="builddir-shared/flashrom-macos-intel-shared-${VERSION}"
+          mkdir -p "$package"
+          install -m 755 builddir-shared/flashrom "$package/flashrom"
+          cp include/libflashrom.h "$package/"
+          cp SHARED_CLI.md "$package/"
+          dylib=builddir-shared/libflashrom.1.dylib
+          test -f "$dylib"
+          cp -L "$dylib" "$package/libflashrom.1.dylib"
+          old_ref="$(otool -L "$package/flashrom" | awk '/libflashrom/ {print $1; exit}')"
+          test -n "$old_ref"
+          install_name_tool -change "$old_ref" '@executable_path/libflashrom.1.dylib' "$package/flashrom"
+          otool -L "$package/flashrom" | grep -F '@executable_path/libflashrom.1.dylib'
+          nm -gU "$package/libflashrom.1.dylib" | grep -F '_flashrom_init'
+          nm -gU "$package/libflashrom.1.dylib" | grep -F '_flashrom_image_read'
+          "$package/flashrom" --version
+          (cd "$package" && ditto -c -k --sequesterRsrc . "../flashrom-macos-intel-shared-${VERSION}.zip")
+          tar czf "${package}.tar.gz" -C "$package" .
+          mkdir -p builddir-shared/verify-shared
+          ditto -x -k "${package}.zip" builddir-shared/verify-shared
+          builddir-shared/verify-shared/flashrom --version
+
       # Check binary
       # ------------------------------------------------------------
 
@@ -208,6 +262,14 @@ jobs:
             builddir/flashrom-macos-intel-${{ env.VERSION }}.tar.gz
 
       # ------------------------------------------------------------
+      - name: Upload shared CLI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flashrom-macos-intel-shared-${{ env.VERSION }}
+          path: |
+            builddir-shared/flashrom-macos-intel-shared-${{ env.VERSION }}.zip
+            builddir-shared/flashrom-macos-intel-shared-${{ env.VERSION }}.tar.gz
+
       # GitHub Release
       # ------------------------------------------------------------
 
@@ -222,6 +284,8 @@ jobs:
           files: |
             builddir/flashrom-macos-intel-${{ env.VERSION }}.zip
             builddir/flashrom-macos-intel-${{ env.VERSION }}.tar.gz
+            builddir-shared/flashrom-macos-intel-shared-${{ env.VERSION }}.zip
+            builddir-shared/flashrom-macos-intel-shared-${{ env.VERSION }}.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

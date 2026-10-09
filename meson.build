@@ -14,11 +14,14 @@ project('flashrom', 'c',
 
 fs = import('fs')
 
-if get_option('classic_cli').enabled() and get_option('default_library') == 'shared'
+if get_option('classic_cli').enabled() and get_option('default_library') == 'shared' and get_option('cli_link_mode') == 'static'
   error('''
-    Cannot build cli_classic with shared libflashrom. Use \'-Dclassic_cli=disabled\' to disable the cli,
-    or use \'--default-library=both\' to also build the classic_cli
+    Cannot build cli_classic with shared libflashrom in static CLI mode. Use
+    '-Dcli_link_mode=shared' or '--default-library=both'.
   ''')
+endif
+if get_option('cli_link_mode') == 'shared' and get_option('default_library') != 'shared'
+  error('The shared CLI needs default_library=shared')
 endif
 
 # libtool versioning
@@ -555,7 +558,7 @@ install_headers([
 include_dir = include_directories('include')
 
 mapfile = 'libflashrom.map'
-if host_machine.system() == 'darwin'
+if host_machine.system() == 'darwin' or get_option('cli_link_mode') == 'shared'
   vflag = ''
 else
   vflag = '-Wl,--version-script,@0@/@1@'.format(meson.current_source_dir(), mapfile)
@@ -575,7 +578,9 @@ libflashrom = library(
     cargs,
   ],
   install : true,
-  link_args : link_args + [vflag],
+  # The classic CLI uses internal library symbols. Export them only in the
+  # separate shared-CLI build; the static CLI and its existing build stay as-is.
+  link_args : link_args + [vflag] + (host_machine.system() == 'windows' and get_option('cli_link_mode') == 'shared' ? ['-Wl,--export-all-symbols'] : []),
   link_depends : mapfile,
 )
 
@@ -588,7 +593,7 @@ pkgg.generate(
   description : 'library to interact with flashrom',
 )
 
-if get_option('classic_cli').enabled() or get_option('classic_cli').auto() and not get_option('default_library') == 'shared'
+if get_option('classic_cli').enabled() or get_option('classic_cli').auto() and (get_option('default_library') != 'shared' or get_option('cli_link_mode') == 'shared')
 
   cli_srcs = files(
     'cli_classic.c',
@@ -604,9 +609,9 @@ if get_option('classic_cli').enabled() or get_option('classic_cli').auto() and n
     include_directories : include_dir,
     install : true,
     install_dir : get_option('sbindir'),
-    link_args : link_args,
-    # flashrom needs internal symbols of libflashrom
-    link_with : get_option('default_library') == 'static' ? libflashrom : libflashrom.get_static_lib(),
+    link_args : link_args + (host_machine.system() == 'windows' and get_option('cli_link_mode') == 'shared' ? ['-Wl,--enable-auto-import'] : []),
+    # The shared mode uses the same CLI sources and requires internal exports.
+    link_with : (get_option('cli_link_mode') == 'shared' or get_option('default_library') == 'static') ? libflashrom : libflashrom.get_static_lib(),
   )
   if get_option('llvm_cov').enabled()
     run_target('llvm-cov-cli', command : ['scripts/llvm-cov', classic_cli])
