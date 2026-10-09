@@ -227,7 +227,6 @@ jobs:
           nm -gU "$package/libflashrom.1.dylib" | grep -F '_flashrom_image_read'
           "$package/flashrom" --version
           (cd "$package" && ditto -c -k --sequesterRsrc . "../flashrom-macos-intel-shared-${VERSION}.zip")
-          tar czf "${package}.tar.gz" -C "$package" .
           mkdir -p builddir-shared/verify-shared
           ditto -x -k "${package}.zip" builddir-shared/verify-shared
           builddir-shared/verify-shared/flashrom --version
@@ -239,29 +238,21 @@ jobs:
           "builddir/flashrom-macos-intel-${VERSION}" --version
           otool -L "builddir/flashrom-macos-intel-${VERSION}"
           (cd builddir && ditto -c -k --sequesterRsrc "flashrom-macos-intel-${VERSION}" "flashrom-macos-intel-${VERSION}.zip")
-          tar czf "builddir/flashrom-macos-intel-${VERSION}.tar.gz" -C builddir "flashrom-macos-intel-${VERSION}"
-          mkdir -p verify/zip verify/tar
+          mkdir -p verify/zip
           ditto -x -k "builddir/flashrom-macos-intel-${VERSION}.zip" verify/zip
           test -x "verify/zip/flashrom-macos-intel-${VERSION}"
           "verify/zip/flashrom-macos-intel-${VERSION}" --version
-          tar xzf "builddir/flashrom-macos-intel-${VERSION}.tar.gz" -C verify/tar
-          test -x "verify/tar/flashrom-macos-intel-${VERSION}"
-          "verify/tar/flashrom-macos-intel-${VERSION}" --version
 
       - uses: actions/upload-artifact@v4
         with:
           name: flashrom-macos-intel-${{ env.VERSION }}
-          path: |
-            builddir/flashrom-macos-intel-${{ env.VERSION }}.zip
-            builddir/flashrom-macos-intel-${{ env.VERSION }}.tar.gz
+          path: builddir/flashrom-macos-intel-${{ env.VERSION }}.zip
           if-no-files-found: error
 
       - uses: actions/upload-artifact@v4
         with:
           name: flashrom-macos-intel-shared-${{ env.VERSION }}
-          path: |
-            builddir-shared/flashrom-macos-intel-shared-${{ env.VERSION }}.zip
-            builddir-shared/flashrom-macos-intel-shared-${{ env.VERSION }}.tar.gz
+          path: builddir-shared/flashrom-macos-intel-shared-${{ env.VERSION }}.zip
           if-no-files-found: error
 
   publish-release:
@@ -293,9 +284,7 @@ jobs:
             "flashrom-win-x64-${version}.zip"
             "flashrom-win-x64-shared-${version}.zip"
             "flashrom-macos-intel-${version}.zip"
-            "flashrom-macos-intel-${version}.tar.gz"
             "flashrom-macos-intel-shared-${version}.zip"
-            "flashrom-macos-intel-shared-${version}.tar.gz"
           )
           for asset in "${assets[@]}"; do
             test -s "release-assets/$asset"
@@ -314,7 +303,5 @@ jobs:
             release-assets/flashrom-win-x64-${{ env.VERSION }}.zip
             release-assets/flashrom-win-x64-shared-${{ env.VERSION }}.zip
             release-assets/flashrom-macos-intel-${{ env.VERSION }}.zip
-            release-assets/flashrom-macos-intel-${{ env.VERSION }}.tar.gz
             release-assets/flashrom-macos-intel-shared-${{ env.VERSION }}.zip
-            release-assets/flashrom-macos-intel-shared-${{ env.VERSION }}.tar.gz
             release-assets/SHA256SUMS.txt
