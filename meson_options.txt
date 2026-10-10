@@ -1,4 +1,6 @@
 option('classic_cli', type : 'feature', value : 'enabled', description : 'classic flashrom cli binary')
+option('cli_link_mode', type : 'combo', choices : ['static', 'shared'], value : 'static',
+       description : 'Link the classic CLI to the static or shared flashrom library')
 option('default_programmer_name', type : 'string', description : 'default programmer')
 option('default_programmer_args', type : 'string', description : 'default programmer arguments')
 option('ich_descriptors_tool', type : 'feature', value : 'auto', description : 'Build ich_descriptors_tool')
