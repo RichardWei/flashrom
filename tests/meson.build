@@ -141,6 +141,14 @@ mocks = [
 
 threads_dep = dependency('threads')
 
+
+
+if host_machine.system() == 'darwin'  # macOS
+  link_args_final = link_args
+else
+  link_args_final = mocks +link_args
+endif
+
 flashrom_tests = executable('flashrom_unit_tests',
   test_srcs,
   c_args : [
@@ -151,9 +159,11 @@ flashrom_tests = executable('flashrom_unit_tests',
     '-DFLASHROM_TEST',
   ],
   export_dynamic : true,
-  link_args : mocks + link_args,
+  link_args : link_args_final,
   dependencies : [cmocka_dep, flashrom_test_dep, threads_dep],
 )
+
+
 test('cmocka test flashrom', flashrom_tests)
 
 if get_option('llvm_cov').enabled()
