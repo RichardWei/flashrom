@@ -55,10 +55,12 @@ static const struct dev_entry devs_ch347_spi[] = {
 	{0}
 };
 
+#ifndef _WIN32
 static int ch347_interface[] = {
 	CH347T_IFACE,
 	CH347F_IFACE,
 };
+#endif
 
 static const struct device_speeds spispeeds[] = {
 	{"60M",     0},
@@ -72,19 +74,69 @@ static const struct device_speeds spispeeds[] = {
 	{NULL,      0}
 };
 
+#ifdef _WIN32
+#include <windows.h>
+typedef int (__stdcall *pCH347OpenDevice)(unsigned long iIndex);
+
+typedef int (__stdcall *pCH347CloseDevice)(unsigned long iIndex);
+typedef unsigned long (__stdcall *pCH347SetTimeout)(
+		unsigned long iIndex,        /* Specify equipment serial number */
+		unsigned long iWriteTimeout, /* Specifies the timeout period for USB
+					    write out data blocks, in milliseconds
+					    mS, and 0xFFFFFFFF specifies no timeout
+					    (default) */
+		unsigned long iReadTimeout); /* Specifies the timeout period for USB
+					    reading data blocks, in milliseconds mS,
+					    and 0xFFFFFFFF specifies no timeout
+					    (default) */
+
+typedef unsigned long (__stdcall *pCH347WriteData)(
+		unsigned long iIndex,     /* Specify equipment serial number */
+		void *oBuffer,            /* Point to a buffer large enough to hold
+					    the descriptor */
+		unsigned long *ioLength); /* Pointing to the length unit, the input
+					    is the length to be read, and the
+					    return is the actual read length */
+
+typedef unsigned long (__stdcall *pCH347ReadData)(
+		unsigned long iIndex,     /* Specify equipment serial number */
+		void *oBuffer,            /* Point to a buffer large enough to
+					    hold the descriptor */
+		unsigned long *ioLength); /* Pointing to the length unit, the input
+					    is the length to be read, and the
+					    return is the actual read length */
+HMODULE uhModule = 0;
+ULONG ugIndex = -1;
+pCH347OpenDevice CH347OpenDevice;
+pCH347CloseDevice CH347CloseDevice;
+pCH347SetTimeout CH347SetTimeout;
+pCH347ReadData CH347ReadData;
+pCH347WriteData CH347WriteData;
+BOOL DevIsOpened = FALSE; /* Whether the device is turned on */
+#endif
+
 static int ch347_spi_shutdown(void *data)
 {
+#ifdef _WIN32
+	if (CH347CloseDevice(ugIndex) == -1) {
+		msg_perr("Close the CH347 failed.\n");
+	} else {
+		DevIsOpened = FALSE;
+	}
+#else
 	struct ch347_spi_data *ch347_data = data;
 	int spi_interface = ch347_data->interface;
 	libusb_release_interface(ch347_data->handle, spi_interface);
 	libusb_attach_kernel_driver(ch347_data->handle, spi_interface);
 	libusb_close(ch347_data->handle);
 	libusb_exit(NULL);
+#endif
 	free(data);
 	return 0;
 }
 
-static int ch347_cs_control(struct ch347_spi_data *ch347_data, uint8_t cs1, uint8_t cs2)
+static int ch347_cs_control(struct ch347_spi_data *ch347_data, uint8_t cs1,
+		uint8_t cs2)
 {
 	uint8_t cmd[13] = {
 		[0] = CH347_CMD_SPI_CS_CTRL,
@@ -93,22 +145,34 @@ static int ch347_cs_control(struct ch347_spi_data *ch347_data, uint8_t cs1, uint
 		[3] = cs1,
 		[8] = cs2
 	};
-
+#ifdef _WIN32
+	long unsigned int transferred = sizeof(cmd);
+	if (!CH347WriteData(ugIndex, cmd, &transferred) || transferred != sizeof(cmd)) {
+		msg_perr("Could not change CS!\n");
+		return -1;
+	}
+#else
 	int32_t ret = libusb_bulk_transfer(ch347_data->handle, WRITE_EP, cmd, sizeof(cmd), NULL, 1000);
 	if (ret < 0) {
 		msg_perr("Could not change CS!\n");
 		return -1;
 	}
+#endif
 	return 0;
 }
 
-
-static int ch347_write(struct ch347_spi_data *ch347_data, unsigned int writecnt, const uint8_t *writearr)
+static int ch347_write(struct ch347_spi_data *ch347_data, unsigned int writecnt,
+		const uint8_t *writearr)
 {
 	unsigned int data_len;
 	int packet_len;
+#ifdef _WIN32
+	long unsigned int transferred;
+#else
 	int transferred;
 	int ret;
+#endif
+
 	uint8_t resp_buf[4] = {0};
 	uint8_t buffer[CH347_PACKET_SIZE] = {0};
 	unsigned int bytes_written = 0;
@@ -121,8 +185,20 @@ static int ch347_write(struct ch347_spi_data *ch347_data, unsigned int writecnt,
 		buffer[1] = (data_len) & 0xFF;
 		buffer[2] = ((data_len) & 0xFF00) >> 8;
 		memcpy(buffer + 3, writearr + bytes_written, data_len);
-
-		ret = libusb_bulk_transfer(ch347_data->handle, WRITE_EP, buffer, packet_len, &transferred, 1000);
+#ifdef _WIN32
+		transferred = packet_len;
+		if (!CH347WriteData(ugIndex, buffer, &transferred) || transferred != (unsigned long int)packet_len) {
+			msg_perr("Could not send write command\n");
+			return -1;
+		}
+		transferred = sizeof(resp_buf);
+		if (!CH347ReadData(ugIndex, resp_buf, &transferred) || transferred != sizeof(resp_buf)) {
+			msg_perr("Could not receive write command response\n");
+			return -1;
+		}
+#else
+		ret = libusb_bulk_transfer(ch347_data->handle, WRITE_EP, buffer, packet_len,
+			&transferred, 1000);
 		if (ret < 0 || transferred != packet_len) {
 			msg_perr("Could not send write command\n");
 			return -1;
@@ -133,6 +209,7 @@ static int ch347_write(struct ch347_spi_data *ch347_data, unsigned int writecnt,
 			msg_perr("Could not receive write command response\n");
 			return -1;
 		}
+#endif
 		bytes_written += data_len;
 	}
 	return 0;
@@ -141,8 +218,13 @@ static int ch347_write(struct ch347_spi_data *ch347_data, unsigned int writecnt,
 static int ch347_read(struct ch347_spi_data *ch347_data, unsigned int readcnt, uint8_t *readarr)
 {
 	uint8_t *read_ptr = readarr;
+
+#ifdef _WIN32
+	long unsigned int transferred;
+#else
 	int ret;
 	int transferred;
+#endif
 	unsigned int bytes_read = 0;
 	uint8_t buffer[CH347_PACKET_SIZE] = {0};
 	uint8_t command_buf[7] = {
@@ -152,21 +234,36 @@ static int ch347_read(struct ch347_spi_data *ch347_data, unsigned int readcnt, u
 		[3] = readcnt & 0xFF,
 		[4] = (readcnt & 0xFF00) >> 8,
 		[5] = (readcnt & 0xFF0000) >> 16,
-		[6] = (readcnt & 0xFF000000) >> 24
+		[6] = (readcnt & 0xFF000000) >> 24,
 	};
-
+#ifdef _WIN32
+	transferred = sizeof(command_buf);
+	if (!CH347WriteData(ugIndex, command_buf, &transferred) || transferred != sizeof(command_buf)) {
+		msg_perr("Could not send read command\n");
+		return -1;
+	}
+#else
 	ret = libusb_bulk_transfer(ch347_data->handle, WRITE_EP, command_buf, sizeof(command_buf), &transferred, 1000);
 	if (ret < 0 || transferred != sizeof(command_buf)) {
 		msg_perr("Could not send read command\n");
 		return -1;
 	}
+#endif
 
 	while (bytes_read < readcnt) {
+#ifdef _WIN32
+		transferred = CH347_PACKET_SIZE;
+		if (!CH347ReadData(ugIndex, buffer, &transferred)) {
+			msg_perr("Could not read data\n");
+			return -1;
+		}
+#else
 		ret = libusb_bulk_transfer(ch347_data->handle, READ_EP, buffer, CH347_PACKET_SIZE, &transferred, 1000);
 		if (ret < 0) {
 			msg_perr("Could not read data\n");
 			return -1;
 		}
+#endif
 		if (transferred > CH347_PACKET_SIZE) {
 			msg_perr("libusb bug: bytes received overflowed buffer\n");
 			return -1;
@@ -176,7 +273,11 @@ static int ch347_read(struct ch347_spi_data *ch347_data, unsigned int readcnt, u
 			msg_perr("CH347 returned an invalid response to read command\n");
 			return -1;
 		}
+#ifdef _WIN32
+		long unsigned int ch347_data_length = read_le16(buffer, 1);
+#else
 		int ch347_data_length = read_le16(buffer, 1);
+#endif
 		if (transferred - 3 < ch347_data_length) {
 			msg_perr("CH347 returned less data than data length header indicates\n");
 			return -1;
@@ -251,7 +352,11 @@ static int ch347_spi_send_command(const struct flashctx *flash, unsigned int wri
 static int32_t ch347_spi_config(struct ch347_spi_data *ch347_data, uint8_t divisor)
 {
 	int32_t ret;
+#ifdef _WIN32
+	unsigned long transferred = 0;
+#else
 	int transferred = 0;
+#endif
 	uint8_t buff[29] = {
 		[0] = CH347_CMD_SPI_SET_CFG,
 		[1] = (sizeof(buff) - 3) & 0xFF,
@@ -263,18 +368,31 @@ static int32_t ch347_spi_config(struct ch347_spi_data *ch347_data, uint8_t divis
 		[19] = 7,
 	};
 
-	ret = libusb_bulk_transfer(ch347_data->handle, WRITE_EP, buff, sizeof(buff), NULL, 1000);
-	if (ret < 0) {
+#ifdef _WIN32
+	transferred = sizeof(buff);
+	if (!CH347WriteData(ugIndex, buff, &transferred) || transferred != sizeof(buff)) {
 		msg_perr("Could not configure SPI interface\n");
-		return ret;
+		return -1;
 	}
+#else
+	ret = libusb_bulk_transfer(ch347_data->handle, WRITE_EP, buff, sizeof(buff), &transferred, 1000);
+	if (ret < 0 || transferred != sizeof(buff)) {
+		msg_perr("Could not configure SPI interface\n");
+		return ret < 0 ? ret : -1;
+	}
+#endif
 
 	/* Read the response into a full-size buffer to drain any extra
 	 * bytes from firmware variants that may echo back the entire
 	 * config. The expected ACK is 4 bytes: cmd, length(2), status.
 	 */
 	uint8_t rbuf[sizeof(buff)] = {0};
+#ifdef _WIN32
+	transferred = sizeof(rbuf);
+	ret = CH347ReadData(ugIndex, rbuf, &transferred) ? 0 : -1;
+#else
 	ret = libusb_bulk_transfer(ch347_data->handle, READ_EP, rbuf, sizeof(rbuf), &transferred, 1000);
+#endif
 	if (ret < 0) {
 		msg_perr("Could not receive configure SPI command response\n");
 		return ret;
@@ -282,7 +400,7 @@ static int32_t ch347_spi_config(struct ch347_spi_data *ch347_data, uint8_t divis
 
 	if (transferred < 4 || rbuf[0] != CH347_CMD_SPI_SET_CFG || rbuf[3] != 0) {
 		msg_perr("CH347 SPI config failed (response: %d bytes, cmd=0x%02x, status=0x%02x)\n",
-			transferred, rbuf[0], transferred >= 4 ? rbuf[3] : 0xff);
+			(int)transferred, rbuf[0], transferred >= 4 ? rbuf[3] : 0xff);
 		return -1;
 	}
 
@@ -304,16 +422,56 @@ static const struct spi_master spi_master_ch347_spi = {
 static int ch347_spi_init(const struct programmer_cfg *cfg)
 {
 	char *arg;
+
+#ifdef _WIN32
+	int open_res = -1;
+#else
 	uint16_t vid = devs_ch347_spi[0].vendor_id;
 	uint16_t pid = 0;
 	int index = 0;
-	int speed_index;
+#endif
+	int speed_index = 0;
 	struct ch347_spi_data *ch347_data = calloc(1, sizeof(*ch347_data));
 	if (!ch347_data) {
 		msg_perr("Could not allocate space for SPI data\n");
 		return 1;
 	}
-
+#ifdef _WIN32
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wcast-function-type"
+	if (uhModule == 0) {
+		uhModule = LoadLibrary("CH347DLLA64.DLL");
+		if (uhModule) {
+			CH347OpenDevice = (pCH347OpenDevice)GetProcAddress(uhModule, "CH347OpenDevice");
+			CH347CloseDevice = (pCH347CloseDevice)GetProcAddress(uhModule, "CH347CloseDevice");
+			CH347ReadData = (pCH347ReadData)GetProcAddress(uhModule, "CH347ReadData");
+			CH347WriteData = (pCH347WriteData)GetProcAddress(uhModule, "CH347WriteData");
+			CH347SetTimeout = (pCH347SetTimeout)GetProcAddress(uhModule, "CH347SetTimeout");
+			if (CH347OpenDevice == NULL || CH347CloseDevice == NULL ||
+				CH347SetTimeout == NULL || CH347ReadData == NULL ||
+				CH347WriteData == NULL) {
+				msg_perr("ch347_spi_init error\n");
+				return -1;
+			}
+		}
+	}
+#pragma GCC diagnostic pop
+	for (int i = 0; i < 16; i++) {
+		if (CH347OpenDevice(i) != -1) {
+			open_res = 0;
+			ugIndex = i;
+			break;
+		}
+	}
+	if (open_res == -1) {
+		DevIsOpened = FALSE;
+		msg_perr("Couldn't open CH347 device.\n");
+		return 1;
+	} else {
+		DevIsOpened = TRUE;
+		msg_pinfo("Open CH347 device success.\n");
+	}
+#else
 	int32_t ret = libusb_init(NULL);
 	if (ret < 0) {
 		msg_perr("Could not initialize libusb!\n");
@@ -342,22 +500,49 @@ static int ch347_spi_init(const struct programmer_cfg *cfg)
 		return 1;
 	}
 
-	if (usb_dev_claim_and_describe(ch347_data->handle, ch347_data->interface) != 0)
-		goto error_exit;
+	ret = libusb_detach_kernel_driver(ch347_data->handle, ch347_data->interface);
+	if (ret != 0 && ret != LIBUSB_ERROR_NOT_FOUND)
+		msg_pwarn("Cannot detach the existing USB driver. Claiming the interface "
+			 "may fail. %s\n",
+			 libusb_error_name(ret));
 
+	ret = libusb_claim_interface(ch347_data->handle, ch347_data->interface);
+	if (ret != 0) {
+		msg_perr("Failed to claim interface %d: '%s'\n", ch347_data->interface,
+			libusb_error_name(ret));
+		goto error_exit;
+	}
+
+	struct libusb_device *dev;
+	if (!(dev = libusb_get_device(ch347_data->handle))) {
+		msg_perr("Failed to get device from device handle.\n");
+		goto error_exit;
+	}
+
+	struct libusb_device_descriptor desc;
+	ret = libusb_get_device_descriptor(dev, &desc);
+	if (ret < 0) {
+		msg_perr("Failed to get device descriptor: '%s'\n", libusb_error_name(ret));
+		goto error_exit;
+	}
+
+	msg_pdbg("Device revision is %d.%01d.%01d\n", (desc.bcdDevice >> 8) & 0x00FF,
+			(desc.bcdDevice >> 4) & 0x000F, (desc.bcdDevice >> 0) & 0x000F);
+#endif
 	/* set CH347 clock division */
-	speed_index = 2; /* default: 15MHz */
 	arg = extract_programmer_param_str(cfg, "spispeed");
 	if (arg) {
 		for (speed_index = 0; spispeeds[speed_index].name; speed_index++) {
-			if (!strncasecmp(spispeeds[speed_index].name, arg, strlen(spispeeds[speed_index].name))) {
+			if (!strncasecmp(spispeeds[speed_index].name, arg,
+					strlen(spispeeds[speed_index].name))) {
 				break;
 			}
 		}
-		if (!spispeeds[speed_index].name) {
-			msg_pwarn("Unknown spispeed value '%s', using default 15MHz.\n", arg);
-			speed_index = 2;
-		}
+	}
+	if (!spispeeds[speed_index].name || !arg) {
+		msg_perr("Unknown value of spispeed parameter, using default 30MHz clock "
+			"spi.\n");
+		speed_index = 1;
 	}
 	free(arg);
 	if (ch347_spi_config(ch347_data, spispeeds[speed_index].divisor) < 0) {
