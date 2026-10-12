@@ -131,7 +131,7 @@ static int ch347_cs_control(struct ch347_spi_data *ch347_data, uint8_t cs1,
 		return -1;
 	}
 #else
-	int32_t ret = libusb_bulk_transfer(ch347_data->handle, WRITE_EP, cmd, sizeof(cmd), NULL, 1000);
+	int32_t ret = libusb_bulk_transfer(ch347_data->handle, CH347_WRITE_EP, cmd, sizeof(cmd), NULL, 1000);
 	if (ret < 0) {
 		msg_perr("Could not change CS!\n");
 		return -1;
@@ -176,7 +176,7 @@ static int ch347_write(struct ch347_spi_data *ch347_data, unsigned int writecnt,
 			return -1;
 		}
 #else
-		ret = libusb_bulk_transfer(ch347_data->handle, WRITE_EP, buffer, packet_len,
+		ret = libusb_bulk_transfer(ch347_data->handle, CH347_WRITE_EP, buffer, packet_len,
 			&transferred, 1000);
 		if (ret < 0 || transferred != packet_len) {
 			msg_perr("Could not send write command\n");
@@ -222,7 +222,7 @@ static int ch347_read(struct ch347_spi_data *ch347_data, unsigned int readcnt, u
 		return -1;
 	}
 #else
-	ret = libusb_bulk_transfer(ch347_data->handle, WRITE_EP, command_buf, sizeof(command_buf), &transferred, 1000);
+	ret = libusb_bulk_transfer(ch347_data->handle, CH347_WRITE_EP, command_buf, sizeof(command_buf), &transferred, 1000);
 	if (ret < 0 || transferred != sizeof(command_buf)) {
 		msg_perr("Could not send read command\n");
 		return -1;
@@ -237,7 +237,7 @@ static int ch347_read(struct ch347_spi_data *ch347_data, unsigned int readcnt, u
 			return -1;
 		}
 #else
-		ret = libusb_bulk_transfer(ch347_data->handle, READ_EP, buffer, CH347_PACKET_SIZE, &transferred, 1000);
+		ret = libusb_bulk_transfer(ch347_data->handle, CH347_READ_EP, buffer, CH347_PACKET_SIZE, &transferred, 1000);
 		if (ret < 0) {
 			msg_perr("Could not read data\n");
 			return -1;
@@ -354,7 +354,7 @@ static int32_t ch347_spi_config(struct ch347_spi_data *ch347_data, uint8_t divis
 		return -1;
 	}
 #else
-	ret = libusb_bulk_transfer(ch347_data->handle, WRITE_EP, buff, sizeof(buff), &transferred, 1000);
+	ret = libusb_bulk_transfer(ch347_data->handle, CH347_WRITE_EP, buff, sizeof(buff), &transferred, 1000);
 	if (ret < 0 || transferred != sizeof(buff)) {
 		msg_perr("Could not configure SPI interface\n");
 		return ret < 0 ? ret : -1;
@@ -370,7 +370,7 @@ static int32_t ch347_spi_config(struct ch347_spi_data *ch347_data, uint8_t divis
 	transferred = sizeof(rbuf);
 	ret = CH347ReadData(ugIndex, rbuf, &transferred) ? 0 : -1;
 #else
-	ret = libusb_bulk_transfer(ch347_data->handle, READ_EP, rbuf, sizeof(rbuf), &transferred, 1000);
+	ret = libusb_bulk_transfer(ch347_data->handle, CH347_READ_EP, rbuf, sizeof(rbuf), &transferred, 1000);
 #endif
 	if (ret < 0) {
 		msg_perr("Could not receive configure SPI command response\n");
