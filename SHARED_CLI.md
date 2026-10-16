@@ -49,6 +49,9 @@ Windows 的依赖库也使用 UCRT64 版本，不能混入旧 MINGW64 目标文�
 程序会列出名称；再次运行时传入其中一个名称即可。示例只读取，不写入或擦除。
 
 ```c
+#if defined(_MSC_VER) && !defined(_CRT_SECURE_NO_WARNINGS)
+#define _CRT_SECURE_NO_WARNINGS
+#endif
 #include <sys/types.h>
 #include <stddef.h>
 #include <stdbool.h>
