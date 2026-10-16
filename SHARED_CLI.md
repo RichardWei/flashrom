@@ -1,20 +1,26 @@
 # 动态库调用指南（Windows / macOS）
 
 `shared` 压缩包包含完整的 `flashrom` 命令行程序、动态库和公共头文件
-`libflashrom.h`。原有静态链接版本仍在单独的发布包中。动态链接版 CLI 的
+`libflashrom.h`。原有静态链接 libflashrom 的 CLI 仍在单独的发布包中；
+静态链接 libflashrom 不代表所有第三方运行库都已静态链接。动态链接版 CLI 的
 CH347 读取命令为 `flashrom.exe -p ch347_spi -r backup.bin`（Windows）或
 `./flashrom -p ch347_spi -r backup.bin`（macOS）。
 
 下面演示**自己的 C 或 C++ 程序**如何在运行时调用动态库。示例代码仅在本文档
-中，仓库没有新增 C++ 源文件。Windows DLL 由 MinGW 构建，但导出 x64 C ABI，
+中，仓库没有新增 C++ 源文件。Windows DLL 由 MSYS2 UCRT64 GCC 构建，导出 x64 C ABI，
 MSVC x64 程序可用 `LoadLibraryA` / `GetProcAddress` 调用；macOS 用
 `dlopen` / `dlsym`。两种平台均无须链接 import `.lib` 或 `.a`。
 
 ## 准备和运行依赖
 
 1. 解压对应平台的 `shared` 包，保持动态库、依赖库和示例 EXE 在同一目录。
-   Windows 包附带构建时识别出的非系统 DLL。macOS 需安装 MacPorts
-   `libusb`：`sudo port install libusb`。
+   Windows 原版和 shared ZIP 均附带构建时识别出的非系统导入 DLL，使用时
+   保留包内文件。Windows 10/11 内置 UCRT；旧系统需要另行部署 UCRT。
+   CH347 硬件操作还需要厂商驱动及 `CH347DLLA64.DLL`；该 DLL 由程序动态加载，
+   不会被导入表扫描自动收集，应从厂商获取并放在程序目录。
+   macOS 原版和 shared ZIP 均为 Intel x64，需要安装 MacPorts
+   `libusb`：`sudo port install libusb`，运行时从 `/opt/local/lib` 加载；
+   macOS ZIP 不包含 libusb，不能视为独立运行包。
 2. 用包内原版 `libflashrom.h` 编译，并确保程序和库均为 x64。原版头文件
    不含 `extern "C"`，且使用 GNU `__attribute__`；下方示例在调用方处理
    MSVC 和 C++ 兼容性，不修改库的头文件。
@@ -23,6 +29,18 @@ MSVC x64 程序可用 `LoadLibraryA` / `GetProcAddress` 调用；macOS 用
 
 库分配的探测结果必须用 `flashrom_data_free` 释放。示例自己用 `malloc`
 分配的读取缓冲区则用自己的 `free` 释放；不要跨 DLL 边界混用内存管理器。
+
+## 发布构建与验证
+
+Actions 使用 Windows Server 2025 + UCRT64，以及 macOS 15 Intel + MacPorts。
+两端只启用 `ch347_spi`，关闭 RPMC、单元测试和 HTML/man 文档生成；原版 CLI
+静态链接 libflashrom，共享版使用 `default_library=shared` 和 `cli_link_mode=shared`。
+Windows 的依赖库也使用 UCRT64 版本，不能混入旧 MINGW64 目标文件或静态库。
+
+发布前会编译并链接下方 C/C++ 示例，在解压后的包上运行 CLI `--version`，
+检查动态库公共符号并调用 `flashrom_init` / `flashrom_shutdown`。Windows 验证
+会限制 PATH；macOS 检查 Intel 架构及动态库加载路径。上述验证不初始化编程器，
+不代表 CH347 硬件探测、读取、写入或擦除已通过测试。
 
 ## C / C++ 通用示例：读取 CH347 芯片
 
