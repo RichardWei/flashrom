@@ -9,7 +9,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#if CONFIG_CH347_SPI == 1
+/* These libusb mocks do not cover the vendor DLL backend used on Windows. */
+#if CONFIG_CH347_SPI == 1 && !defined(_WIN32)
 
 /*
  * The CH347 speaks a small packet protocol over two bulk endpoints:
@@ -140,4 +141,4 @@ void ch347_spi_fault_wrapped_probe_test_success(void **state)
 	SKIP_TEST(ch347_spi_probe_lifecycle_test_success)
 	SKIP_TEST(ch347_spi_fault_wrapped_basic_test_success)
 	SKIP_TEST(ch347_spi_fault_wrapped_probe_test_success)
-#endif /* CONFIG_CH347_SPI */
+#endif /* CONFIG_CH347_SPI == 1 && !defined(_WIN32) */
